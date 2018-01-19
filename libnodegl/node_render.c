@@ -38,6 +38,9 @@
                                           NGL_NODE_UNIFORMQUAT,       \
                                           NGL_NODE_UNIFORMINT,        \
                                           NGL_NODE_UNIFORMMAT4,       \
+                                          NGL_NODE_UNIFORMSTREAMVEC4, \
+                                          NGL_NODE_UNIFORMSTREAMQUAT, \
+                                          NGL_NODE_UNIFORMSTREAMMAT4, \
                                           -1}
 
 #define ATTRIBUTES_TYPES_LIST (const int[]){NGL_NODE_BUFFERFLOAT,   \
@@ -111,17 +114,91 @@ static int update_uniforms(struct ngl_node *node)
         int i = 0;
         const struct hmap_entry *entry = NULL;
         while ((entry = ngli_hmap_next(s->uniforms, entry))) {
-            const struct ngl_node *unode = entry->data;
-            const struct uniform *u = unode->priv_data;
             const GLint uid = s->uniform_ids[i];
+            const struct ngl_node *unode = entry->data;
             switch (unode->class->id) {
-            case NGL_NODE_UNIFORMFLOAT:  ngli_glUniform1f (gl, uid,    u->scalar);                 break;
-            case NGL_NODE_UNIFORMVEC2:   ngli_glUniform2fv(gl, uid, 1, u->vector);                 break;
-            case NGL_NODE_UNIFORMVEC3:   ngli_glUniform3fv(gl, uid, 1, u->vector);                 break;
-            case NGL_NODE_UNIFORMVEC4:   ngli_glUniform4fv(gl, uid, 1, u->vector);                 break;
-            case NGL_NODE_UNIFORMINT:    ngli_glUniform1i (gl, uid,    u->ival);                   break;
-            case NGL_NODE_UNIFORMQUAT:   ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, u->matrix); break;
-            case NGL_NODE_UNIFORMMAT4:   ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, u->matrix); break;
+            case NGL_NODE_UNIFORMFLOAT: {
+                const struct uniform *u = unode->priv_data;
+                ngli_glUniform1f(gl, uid, u->scalar);
+                break;
+            }
+            case NGL_NODE_UNIFORMVEC2: {
+                const struct uniform *u = unode->priv_data;
+                ngli_glUniform2fv(gl, uid, 1, u->vector);
+                break;
+            }
+            case NGL_NODE_UNIFORMVEC3: {
+                const struct uniform *u = unode->priv_data;
+                ngli_glUniform3fv(gl, uid, 1, u->vector);
+                break;
+            }
+            case NGL_NODE_UNIFORMVEC4: {
+                const struct uniform *u = unode->priv_data;
+                ngli_glUniform4fv(gl, uid, 1, u->vector);
+                break;
+            }
+            case NGL_NODE_UNIFORMQUAT: {
+                const struct uniform *u = unode->priv_data;
+                NGLI_ALIGNED_MAT(rotm);
+                ngli_mat4_rotation_from_quat(rotm, u->vector);
+                ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, rotm);
+                break;
+            }
+            case NGL_NODE_UNIFORMINT: {
+                const struct uniform *u = unode->priv_data;
+                ngli_glUniform1i (gl, uid, u->ival);
+                break;
+            }
+            case NGL_NODE_UNIFORMMAT4: {
+                const struct uniform *u = unode->priv_data;
+                ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, u->matrix);
+                break;
+            }
+            case NGL_NODE_UNIFORMSTREAMVEC4: {
+                const struct uniformstream *u = unode->priv_data;
+                if (u->count) {
+                    int i = node->last_update_time / u->update_interval;
+                    i = i < 0 ? 0 : i;
+                    i = i >= u->count ? u->count - 1 : i;
+                    LOG(VERBOSE, "upload uniform stream at pos=%d (%g/%g)", i, node->last_update_time, u->update_interval);
+                    ngli_glUniform4fv(gl, uid, 1, (GLfloat *)(u->data + i * u->data_stride));
+                } else {
+                    float vec4[4] = {0.0, 0.0, 0.0, 1.0};
+                    ngli_glUniform4fv(gl, uid, 1, vec4);
+                }
+                break;
+            }
+            case NGL_NODE_UNIFORMSTREAMQUAT: {
+                const struct uniformstream *u = unode->priv_data;
+                if (u->count) {
+                    int i = node->last_update_time / u->update_interval;
+                    i = i < 0 ? 0 : i;
+                    i = i >= u->count ? u->count - 1 : i;
+                    LOG(VERBOSE, "upload uniform stream at pos=%d (%g/%g)", i, node->last_update_time, u->update_interval);
+                    NGLI_ALIGNED_MAT(rotm);
+                    ngli_mat4_rotation_from_quat(rotm, (float *)(u->data + i * u->data_stride));
+                    ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, rotm);
+                } else {
+                    NGLI_ALIGNED_MAT(rotm);
+                    ngli_mat4_identity(rotm);
+                    ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, rotm);
+                }
+                break;
+            }
+            case NGL_NODE_UNIFORMSTREAMMAT4: {
+                const struct uniformstream *u = unode->priv_data;
+                if (u->count) {
+                    int i = node->last_update_time / u->update_interval;
+                    i = i < 0 ? 0 : i;
+                    i = i >= u->count ? u->count - 1 : i;
+                    LOG(VERBOSE, "upload uniform stream at pos=%d (%g/%g)", i, node->last_update_time, u->update_interval);
+                    ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, (GLfloat *)(u->data + i * u->data_stride));
+                } else {
+                    float mat4[4*4] = NGLI_MAT4_IDENTITY;
+                    ngli_glUniformMatrix4fv(gl, uid, 1, GL_FALSE, mat4);
+                }
+                break;
+            }
             default:
                 LOG(ERROR, "unsupported uniform of type %s", unode->class->name);
                 break;

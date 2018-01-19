@@ -88,6 +88,7 @@ LIB_OBJS = api.o                    \
            node_translate.o         \
            node_triangle.o          \
            node_uniform.o           \
+           node_uniformstream.o     \
            nodes.o                  \
            params.o                 \
            serialize.o              \

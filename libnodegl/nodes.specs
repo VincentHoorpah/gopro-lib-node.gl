@@ -401,3 +401,18 @@
         - [value, vec4]
         - [anim, Node]
 
+- UniformStreamVec4:
+    constructors:
+        - [data, data]
+        - [update_interval, double]
+
+- UniformStreamQuat:
+    constructors:
+        - [data, data]
+        - [update_interval, double]
+
+- UniformStreamMat4:
+    constructors:
+        - [data, data]
+        - [update_interval, double]
+

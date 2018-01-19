@@ -164,6 +164,10 @@ struct ngl_node;
 #define NGL_NODE_UNIFORMVEC3            NGLI_FOURCC('U','n','f','3')
 #define NGL_NODE_UNIFORMVEC4            NGLI_FOURCC('U','n','f','4')
 #define NGL_NODE_UNIFORMQUAT            NGLI_FOURCC('U','n','Q','t')
+#define NGL_NODE_UNIFORMQUAT            NGLI_FOURCC('U','n','Q','t')
+#define NGL_NODE_UNIFORMSTREAMVEC4      NGLI_FOURCC('U','S','f','4')
+#define NGL_NODE_UNIFORMSTREAMQUAT      NGLI_FOURCC('U','S','Q','t')
+#define NGL_NODE_UNIFORMSTREAMMAT4      NGLI_FOURCC('U','S','M','4')
 
 /**
  * Allocate a node.

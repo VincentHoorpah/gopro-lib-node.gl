@@ -190,6 +190,15 @@ struct uniform {
     struct ngl_node *transform;
 };
 
+struct uniformstream {
+    int count;
+    uint8_t *data;
+    int data_size;
+    int data_comp;
+    int data_stride;
+    double update_interval;
+};
+
 struct attribute {
     const char *name;
 };

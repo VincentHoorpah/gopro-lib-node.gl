@@ -29,6 +29,7 @@
 #include "nodegl.h"
 #include "nodes.h"
 #include "transforms.h"
+#include "log.h"
 
 #define OFFSET(x) offsetof(struct uniform, x)
 static const struct node_param uniformfloat_params[] = {

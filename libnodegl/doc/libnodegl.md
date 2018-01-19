@@ -369,7 +369,7 @@ Parameter | Ctor. | Type | Description | Default
 `geometry` | ✓ | [`Node`](#parameter-types) ([Circle](#circle), [Geometry](#geometry), [Quad](#quad), [Triangle](#triangle)) |  | 
 `program` |  | [`Node`](#parameter-types) ([Program](#program)) |  | 
 `textures` |  | [`NodeDict`](#parameter-types) ([Texture2D](#texture2d), [Texture3D](#texture3d)) |  | 
-`uniforms` |  | [`NodeDict`](#parameter-types) ([UniformFloat](#uniformfloat), [UniformVec2](#uniformvec2), [UniformVec3](#uniformvec3), [UniformVec4](#uniformvec4), [UniformQuat](#uniformquat), [UniformInt](#uniformint), [UniformMat4](#uniformmat4)) |  | 
+`uniforms` |  | [`NodeDict`](#parameter-types) ([UniformFloat](#uniformfloat), [UniformVec2](#uniformvec2), [UniformVec3](#uniformvec3), [UniformVec4](#uniformvec4), [UniformQuat](#uniformquat), [UniformInt](#uniformint), [UniformMat4](#uniformmat4), [UniformStreamVec4](#uniformstreamvec4), [UniformStreamQuat](#uniformstreamquat), [UniformStreamMat4](#uniformstreammat4)) |  | 
 `attributes` |  | [`NodeDict`](#parameter-types) ([BufferFloat](#buffer), [BufferVec2](#buffer), [BufferVec3](#buffer), [BufferVec4](#buffer)) |  | 
 `buffers` |  | [`NodeDict`](#parameter-types) ([BufferFloat](#buffer), [BufferVec2](#buffer), [BufferVec3](#buffer), [BufferVec4](#buffer), [BufferInt](#buffer), [BufferIVec2](#buffer), [BufferIVec3](#buffer), [BufferIVec4](#buffer), [BufferUInt](#buffer), [BufferUIVec2](#buffer), [BufferUIVec3](#buffer), [BufferUIVec4](#buffer)) |  | 
 
@@ -617,6 +617,39 @@ Parameter | Ctor. | Type | Description | Default
 
 
 **Source**: [node_uniform.c](/libnodegl/node_uniform.c)
+
+
+## UniformStreamVec4
+
+Parameter | Ctor. | Type | Description | Default
+--------- | :---: | ---- | ----------- | :-----:
+`data` | ✓ | [`data`](#parameter-types) |  | 
+`update_interval` | ✓ | [`double`](#parameter-types) |  | `0`
+
+
+**Source**: [node_uniformstream.c](/libnodegl/node_uniformstream.c)
+
+
+## UniformStreamQuat
+
+Parameter | Ctor. | Type | Description | Default
+--------- | :---: | ---- | ----------- | :-----:
+`data` | ✓ | [`data`](#parameter-types) |  | 
+`update_interval` | ✓ | [`double`](#parameter-types) |  | `0`
+
+
+**Source**: [node_uniformstream.c](/libnodegl/node_uniformstream.c)
+
+
+## UniformStreamMat4
+
+Parameter | Ctor. | Type | Description | Default
+--------- | :---: | ---- | ----------- | :-----:
+`data` | ✓ | [`data`](#parameter-types) |  | 
+`update_interval` | ✓ | [`double`](#parameter-types) |  | `0`
+
+
+**Source**: [node_uniformstream.c](/libnodegl/node_uniformstream.c)
 
 Parameter types
 ===============

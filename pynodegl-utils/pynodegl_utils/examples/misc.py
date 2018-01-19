@@ -42,6 +42,7 @@ from pynodegl import (
         UniformVec3,
         UniformVec4,
         UniformQuat,
+        UniformStreamMat4,
 )
 
 from pynodegl_utils.misc import scene, get_frag, get_vert, get_comp
@@ -519,6 +520,7 @@ def histogram(cfg):
     g.add_children(render)
 
     return g
+<<<<<<< HEAD
 
 
 @scene()
@@ -555,3 +557,44 @@ def quaternion(cfg):
     camera.set_perspective(45.0, cfg.aspect_ratio[0] / float(cfg.aspect_ratio[1]), 1.0, 10.0)
 
     return camera
+||||||| parent of 77f6e19... nodes: add UniformStream{Vec4,Mat4}
+=======
+
+
+@scene()
+def uniform_stream(cfg):
+    cfg.duration = cfg.medias[0].duration
+
+    data = array.array('f')
+    for i in range(361):
+        a = i * (2.0 * math.pi / 360.0);
+        data.extend((math.cos(a), math.sin(a), 0.0, 0.0,
+                    -math.sin(a), math.cos(a), 0.0, 0.0,
+                     0.0,         0.0,         1.0, 0.0,
+                     0.0,         0.0,         0.0, 1.0))
+    stream = UniformStreamMat4(data, 1/60.0)
+
+    #quat = UniformQuat(value=(0, 0, -math.sqrt(0.5), math.sqrt(0.5)))
+    quat = UniformQuat(value=(0, 0,  math.sqrt(0.5), math.sqrt(0.5)))
+
+    quat_animkf = [AnimKeyFrameQuat(0,                (0, 0,-math.sqrt(0.5), math.sqrt(0.5)), 0.0),
+                   AnimKeyFrameQuat(cfg.duration/2.0, (0, 0, math.sqrt(0.5), math.sqrt(0.5)), 1.0)]
+    quat = UniformQuat(anim=AnimatedQuat(quat_animkf))
+
+    q = Quad((-1, -1, 0), (2, 0, 0), (0, 2, 0))
+    m = Media(cfg.medias[0].filename)
+    t = Texture2D(data_src=m)
+    p = Program(vertex=get_vert('uniform-stream'))
+    render = Render(q, p)
+    render.update_textures(tex0=t)
+    render.update_uniforms(transformation_matrix=quat)
+    #render.update_uniforms(transformation_matrix=stream)
+
+    camera = Camera(render)
+    camera.set_eye(0.0, 0.0, 4.0)
+    camera.set_center(0.0, 0.0, 0.0)
+    camera.set_up(0.0, 1.0, 0.0)
+    camera.set_perspective(45.0, cfg.aspect_ratio[0] / float(cfg.aspect_ratio[1]), 1.0, 10.0)
+
+    return camera
+>>>>>>> 77f6e19... nodes: add UniformStream{Vec4,Mat4}

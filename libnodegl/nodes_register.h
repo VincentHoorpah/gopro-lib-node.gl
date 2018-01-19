@@ -98,5 +98,8 @@
     action(NGL_NODE_UNIFORMVEC3,            ngli_uniformvec3_class)             \
     action(NGL_NODE_UNIFORMVEC4,            ngli_uniformvec4_class)             \
     action(NGL_NODE_UNIFORMQUAT,            ngli_uniformquat_class)             \
+    action(NGL_NODE_UNIFORMSTREAMVEC4,      ngli_uniformstreamvec4_class)       \
+    action(NGL_NODE_UNIFORMSTREAMQUAT,      ngli_uniformstreamquat_class)       \
+    action(NGL_NODE_UNIFORMSTREAMMAT4,      ngli_uniformstreammat4_class)       \
 
 #endif
