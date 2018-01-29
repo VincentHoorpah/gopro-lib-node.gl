@@ -108,6 +108,11 @@ class BuildExtCommand(build_ext):
                 elif field_type in ('select', 'flags', 'string'):
                     construct_cargs.append(field_name)
                     construct_args.append('const char *%s' % field_name)
+                elif field_type == 'data':
+                    cargs = '<int>(%(field_name)s.buffer_info()[1] * %(field_name)s.itemsize), '
+                    cargs += '<void *>(%(field_name)s.data.as_voidptr)'
+                    construct_cargs.append(cargs % {'field_name': field_name})
+                    construct_args.append('array.array %s' % field_name)
                 elif field_type.startswith('vec') or field_type == 'mat4':
                     n = int(field_type[3:]) if field_type.startswith('vec') else 16
                     cparam = field_name + '_c'
