@@ -92,6 +92,7 @@
         - [filename, string]
         - [stride, int]
         - [usage, select]
+        - [update_interval, rational]
 
 - BufferBVec2: _Buffer
 

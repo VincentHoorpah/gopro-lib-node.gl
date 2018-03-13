@@ -163,22 +163,22 @@ static int update_uniforms(struct ngl_node *node)
             }
             case NGL_NODE_BUFFERFLOAT: {
                 const struct buffer *buffer = unode->priv_data;
-                ngli_glUniform1fv(gl, uid, buffer->count, (const GLfloat *)buffer->data);
+                ngli_glUniform1fv(gl, uid, buffer->count, (const GLfloat *)buffer->data_chunk);
                 break;
             }
             case NGL_NODE_BUFFERVEC2: {
                 const struct buffer *buffer = unode->priv_data;
-                ngli_glUniform2fv(gl, uid, buffer->count, (const GLfloat *)buffer->data);
+                ngli_glUniform2fv(gl, uid, buffer->count, (const GLfloat *)buffer->data_chunk);
                 break;
             }
             case NGL_NODE_BUFFERVEC3: {
                 const struct buffer *buffer = unode->priv_data;
-                ngli_glUniform3fv(gl, uid, buffer->count, (const GLfloat *)buffer->data);
+                ngli_glUniform3fv(gl, uid, buffer->count, (const GLfloat *)buffer->data_chunk);
                 break;
             }
             case NGL_NODE_BUFFERVEC4: {
                 const struct buffer *buffer = unode->priv_data;
-                ngli_glUniform4fv(gl, uid, buffer->count, (const GLfloat *)buffer->data);
+                ngli_glUniform4fv(gl, uid, buffer->count, (const GLfloat *)buffer->data_chunk);
                 break;
             }
             default:

@@ -172,6 +172,10 @@ struct buffer {
     GLenum data_comp_type;  // type of a single component: integer, float, ...
     GLenum usage;
 
+    int update_interval[2];
+    uint8_t *data_chunk;
+    int data_chunk_size;
+
     /* animatedbuffer */
     struct ngl_node **animkf;
     int nb_animkf;

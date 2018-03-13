@@ -28,6 +28,8 @@
 #include "log.h"
 #include "nodegl.h"
 #include "nodes.h"
+#include <string.h>
+#include <math.h>
 
 static const struct param_choices usage_choices = {
     .name = "buffer_usage",
@@ -67,6 +69,8 @@ static const struct node_param buffer_params[] = {
     {"usage",  PARAM_TYPE_SELECT, OFFSET(usage),  {.i64=GL_STATIC_DRAW},
                .desc=NGLI_DOCSTRING("buffer usage hint"),
                .choices=&usage_choices},
+    {"update_interval", PARAM_TYPE_RATIONAL, OFFSET(update_interval), {.r={0, 1}},
+               .desc=NGLI_DOCSTRING("interval at which the data will be updated")},
     {NULL}
 };
 
@@ -74,14 +78,28 @@ static int buffer_init_from_data(struct ngl_node *node)
 {
     struct buffer *s = node->priv_data;
 
-    s->count = s->count ? s->count : s->data_size / s->data_stride;
-    if (s->data_size != s->count * s->data_stride) {
-        LOG(ERROR,
-            "element count (%d) and data stride (%d) does not match data size (%d)",
-            s->count,
-            s->data_stride,
-            s->data_size);
-        return -1;
+    if (s->update_interval[0]) {
+        s->data_chunk = s->data;
+        s->data_chunk_size = s->count * s->data_stride;
+        if (s->data_size % s->data_chunk_size) {
+            LOG(ERROR,
+                "data size (%d) is not a multiple of data chunk size (%d)",
+                s->data_size,
+                s->data_chunk_size);
+            return -1;
+        }
+    } else {
+        s->count = s->count ? s->count : s->data_size / s->data_stride;
+        if (s->data_size != s->count * s->data_stride) {
+            LOG(ERROR,
+                "element count (%d) and data stride (%d) does not match data size (%d)",
+                s->count,
+                s->data_stride,
+                s->data_size);
+            return -1;
+        }
+        s->data_chunk = s->data;
+        s->data_chunk_size = s->data_size;
     }
 
     return 0;
@@ -104,29 +122,44 @@ static int buffer_init_from_filename(struct ngl_node *node)
         return -1;
     }
     s->data_size = filesize;
-    s->count = s->count ? s->count : s->data_size / s->data_stride;
 
-    if (s->data_size != s->count * s->data_stride) {
-        LOG(ERROR,
-            "element count (%d) and data stride (%d) does not match data size (%d)",
-            s->count,
-            s->data_stride,
-            s->data_size);
-        return -1;
+    if (s->update_interval[0]) {
+        s->data_chunk_size = s->count * s->data_stride;
+        if (s->data_size % s->data_chunk_size) {
+            LOG(ERROR,
+                "data size (%d) is not a multiple of data chunk size (%d)",
+                s->data_size,
+                s->data_chunk_size);
+            return -1;
+        }
+    } else {
+        s->count = s->count ? s->count : s->data_size / s->data_stride;
+        if (s->data_size != s->count * s->data_stride) {
+            LOG(ERROR,
+                "element count (%d) and data stride (%d) does not match data size (%d)",
+                s->count,
+                s->data_stride,
+                s->data_chunk_size);
+            return -1;
+        }
+        s->data_chunk_size = s->data_size;
     }
 
-    s->data = calloc(s->count, s->data_stride);
+    s->data_chunk = s->data = calloc(s->count, s->data_stride);
     if (!s->data)
         return -1;
 
-    ssize_t n = read(s->fd, s->data, s->data_size);
+    ssize_t n = read(s->fd, s->data_chunk, s->data_chunk_size);
     if (n < 0) {
         LOG(ERROR, "could not read '%s': %zd", s->filename, n);
         return -1;
     }
 
-    if (n != s->data_size) {
-        LOG(ERROR, "read %zd bytes does not match expected size of %d bytes", n, s->data_size);
+    if (n != s->data_chunk_size) {
+        LOG(ERROR,
+            "read %zd bytes does not match expected size of %d bytes",
+            n,
+            s->data_chunk_size);
         return -1;
     }
 
@@ -143,6 +176,9 @@ static int buffer_init_from_count(struct ngl_node *node)
     if (!s->data)
         return -1;
 
+    s->data_chunk = s->data;
+    s->data_chunk_size = s->data_size;
+
     return 0;
 }
 
@@ -157,6 +193,18 @@ static int buffer_init(struct ngl_node *node)
     if (s->data && s->filename) {
         LOG(ERROR,
             "data and filename option cannot be set at the same time");
+        return -1;
+    }
+
+    if (s->update_interval[0] && !s->count) {
+        LOG(ERROR,
+            "count must be set in conjunction with update_interval");
+        return -1;
+    }
+
+    if (s->update_interval[0] && !s->data && !s->filename) {
+        LOG(ERROR,
+            "data or filename must be set in conjonction with update_interval");
         return -1;
     }
 
@@ -216,7 +264,49 @@ static int buffer_init(struct ngl_node *node)
     if (s->generate_gl_buffer) {
         ngli_glGenBuffers(gl, 1, &s->buffer_id);
         ngli_glBindBuffer(gl, GL_ARRAY_BUFFER, s->buffer_id);
-        ngli_glBufferData(gl, GL_ARRAY_BUFFER, s->data_size, s->data, s->usage);
+        ngli_glBufferData(gl, GL_ARRAY_BUFFER, s->data_chunk_size, s->data_chunk, s->usage);
+        ngli_glBindBuffer(gl, GL_ARRAY_BUFFER, 0);
+    }
+
+    return 0;
+}
+
+static int buffer_update(struct ngl_node *node, double t)
+{
+    struct ngl_ctx *ctx = node->ctx;
+    struct glcontext *glcontext = ctx->glcontext;
+    const struct glfunctions *gl = &glcontext->funcs;
+
+    struct buffer *s = node->priv_data;
+
+    if (!s->update_interval[0])
+        return 0;
+
+    int i = t * s->update_interval[1] / s->update_interval[0];
+    size_t offset = i * s->data_chunk_size;
+    size_t end = s->data_size - s->data_chunk_size;
+
+    if (offset > end)
+        offset = end;
+
+    if (s->filename) {
+        off_t w = lseek(s->fd, offset, SEEK_SET);
+        if (w < 0)
+            return -1;
+        ssize_t n = read(s->fd, s->data_chunk, s->data_chunk_size);
+        if (n < 0) {
+            LOG(ERROR, "could not read '%s': %zd", s->filename, n);
+            return -1;
+        }
+    } else if (s->data) {
+        s->data_chunk = s->data + offset;
+    } else {
+        ngli_assert(0);
+    }
+
+    if (s->generate_gl_buffer) {
+        ngli_glBindBuffer(gl, GL_ARRAY_BUFFER, s->buffer_id);
+        ngli_glBufferData(gl, GL_ARRAY_BUFFER, s->data_chunk_size, s->data_chunk, s->usage);
         ngli_glBindBuffer(gl, GL_ARRAY_BUFFER, 0);
     }
 
@@ -246,6 +336,7 @@ const struct node_class ngli_buffer##type##_class = {       \
     .id        = class_id,                                  \
     .name      = class_name,                                \
     .init      = buffer_init,                               \
+    .update    = buffer_update,                             \
     .uninit    = buffer_uninit,                             \
     .priv_size = sizeof(struct buffer),                     \
     .params    = buffer_params,                             \
