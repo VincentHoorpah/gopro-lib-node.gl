@@ -143,7 +143,10 @@ static void print_all_decls(struct bstr *b, const struct ngl_node *node, struct 
     if (!ngli_is_default_name(node->class->name, node->name) && *node->name)
         ngli_bstr_print(b, "<i>%s</i><br/>", node->name);
     print_custom_priv_options(b, node);
-    ngli_bstr_print(b, ">,color="HSLFMT"]\n", get_hue(node->class->name));
+    if (!node->ctx || node->is_active)
+        ngli_bstr_print(b, ">,color="HSLFMT"]\n", get_hue(node->class->name));
+    else
+        ngli_bstr_print(b, ">,color=\"#333333\"]\n");
 
     print_decls(b, node, ngli_base_node_params, (uint8_t *)node, decls);
     print_decls(b, node, node->class->params, node->priv_data, decls);
