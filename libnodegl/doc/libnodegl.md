@@ -156,6 +156,7 @@ Parameter | Ctor. | Type | Description | Default
 `stride` |  | [`int`](#parameter-types) | stride of 1 element, in bytes | `0`
 `usage` |  | [`buffer_usage`](#buffer_usage-choices) | buffer usage hint | `static_draw`
 `update_interval` |  | [`rational`](#parameter-types) | interval at which the data will be updated | 
+`time_anim` |  | [`Node`](#parameter-types) ([AnimatedFloat](#animatedfloat)) | time remapping animation (must use a `linear` interpolation) | 
 
 
 **Source**: [node_buffer.c](/libnodegl/node_buffer.c)

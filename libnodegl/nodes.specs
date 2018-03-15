@@ -93,6 +93,7 @@
         - [stride, int]
         - [usage, select]
         - [update_interval, rational]
+        - [time_anim, Node]
 
 - BufferBVec2: _Buffer
 

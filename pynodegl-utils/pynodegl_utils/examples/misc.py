@@ -562,15 +562,17 @@ precision highp float;
 varying vec2 var_uvcoord;
 varying vec2 var_tex0_coord;
 uniform sampler2D tex0_sampler;
+uniform float tex0_ts;
 
 uniform vec4 colors[3];
 
 void main(void)
 {
+    float scale = tex0_ts / 10.0;
     int i = int(var_uvcoord.x * 3.0);
     highp vec4 f = colors[i];
     vec4 color = texture2D(tex0_sampler, var_tex0_coord);
-    gl_FragColor = mix(f, f, 0.5);
+    gl_FragColor = mix(color, f, scale);
 }
 
 """
