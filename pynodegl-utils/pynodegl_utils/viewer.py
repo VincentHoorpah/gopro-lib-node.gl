@@ -280,11 +280,50 @@ class _GraphView(QtWidgets.QWidget):
         cfg = self._get_scene_func(fmt='dot')
         if not cfg:
             return
+        self._seekbar.set_duration(cfg['duration'])
+        self._update_graph(cfg['scene'])
 
+    def _disable_timed_scene(self):
+        if self._viewer:
+            self._glctx.makeCurrent(self._surface)
+            self._viewer = None
+            del self._surface
+
+    def _enable_timed_scene(self):
+        cfg = self._get_scene_func()
+        if not cfg:
+            return
+
+        # GL context
+        glctx = QtGui.QOpenGLContext()
+        assert glctx.create() is True
+        assert glctx.isValid() is True
+
+        # Offscreen Surface
+        surface = QtGui.QOffscreenSurface()
+        surface.create()
+        assert surface.isValid() is True
+
+        glctx.makeCurrent(surface)
+
+        # node.gl context
+        ngl_viewer = ngl.Viewer()
+        ngl_viewer.set_scene_from_string(cfg['scene'])
+        ngl_viewer.configure(ngl.GLPLATFORM_AUTO, ngl.GLAPI_AUTO)
+
+        glctx.doneCurrent()
+
+        self._viewer = ngl_viewer
+        self._glctx = glctx
+        self._surface = surface
+
+        self._seekbar.refresh()  # trigger a timeChanged signal
+
+    def _update_graph(self, dot_scene):
         basename = '/tmp/ngl_scene.'
         dotfile = basename + 'dot'
         svgfile = basename + 'svg'
-        open(dotfile, 'w').write(cfg['scene'])
+        open(dotfile, 'w').write(dot_scene)
         try:
             subprocess.call(['dot', '-Tsvg', dotfile, '-o' + svgfile])
         except OSError, e:
@@ -298,10 +337,38 @@ class _GraphView(QtWidgets.QWidget):
         self._scene.addItem(item)
         self._scene.setSceneRect(item.boundingRect())
 
-    def __init__(self, get_scene_func):
+    @QtCore.pyqtSlot(tuple)
+    def set_frame_rate(self, fr):
+        self._seekbar.set_framerate(fr)
+
+    @QtCore.pyqtSlot(int)
+    def set_samples(self, samples):
+        self._samples = samples
+
+    @QtCore.pyqtSlot(int)
+    def _seek_check_changed(self, state):
+        if not state:
+            self._seekbar.setEnabled(False)
+            self._disable_timed_scene()
+        else:
+            self._seekbar.setEnabled(True)
+            self._enable_timed_scene()
+        self.refresh()
+
+    def _time_changed(self, time):
+        if not self._viewer:
+            return
+        self._glctx.makeCurrent(self._surface)
+        dot_scene = self._viewer.dot_at_time(time)
+        self._glctx.doneCurrent()
+        self._update_graph(dot_scene)
+
+    def __init__(self, get_scene_func, config):
         super(_GraphView, self).__init__()
 
         self._get_scene_func = get_scene_func
+        self._samples = config.get('samples')
+        self._viewer = None
 
         self._save_btn = QtWidgets.QPushButton("Save image")
 
@@ -309,18 +376,29 @@ class _GraphView(QtWidgets.QWidget):
         self._view = _SVGGraphView()
         self._view.setScene(self._scene)
 
+        self._seek_chkbox = QtWidgets.QCheckBox("Show graph at a given time")
+        self._seekbar = _Seekbar(config.get('framerate'))
+        self._seekbar.setEnabled(False)
+
         hbox = QtWidgets.QHBoxLayout()
         hbox.addStretch()
         hbox.addWidget(self._save_btn)
 
         graph_layout = QtWidgets.QVBoxLayout(self)
+        graph_layout.addWidget(self._seek_chkbox)
+        graph_layout.addWidget(self._seekbar)
         graph_layout.addWidget(self._view)
         graph_layout.addLayout(hbox)
 
         self._save_btn.clicked.connect(self._save_to_file)
+        self._seek_chkbox.stateChanged.connect(self._seek_check_changed)
+        self._seekbar.timeChanged.connect(self._time_changed)
 
 
-class _GLView(QtWidgets.QWidget):
+class _Seekbar(QtWidgets.QWidget):
+
+    stopped = QtCore.pyqtSignal(name='stopped')
+    time_changed = QtCore.pyqtSignal(float, name='timeChanged')
 
     REFRESH_RATE = 60
     SLIDER_TIMEBASE = 1000
@@ -342,15 +420,6 @@ class _GLView(QtWidgets.QWidget):
             self._action_btn.setText(u'▶')
         self._current_action = action
 
-    @QtCore.pyqtSlot(int)
-    def _slider_moved(self, value):  # only user move
-        if not self._scene_duration:
-            return
-        self._set_action('pause')
-        self._frame_index = int(value * self.SLIDER_TIMESCALE * self._framerate[0] / self._framerate[1])
-        self._reset_clock()
-        self._refresh()
-
     @QtCore.pyqtSlot()
     def _toggle_playback(self):
         self._set_action('play' if self._current_action == 'pause' else 'pause')
@@ -364,30 +433,19 @@ class _GLView(QtWidgets.QWidget):
             self._clock_off = now_int
             media_time = 0
         self._frame_index = media_time * self._framerate[0] / (self._framerate[1] * self.TIMEBASE)
-        self._refresh()
-
-    @QtCore.pyqtSlot()
-    def _refresh(self):
-        rendering_fps = self._framerate[0] / float(self._framerate[1])
-        t = self._frame_index * 1. / rendering_fps
-        if self._gl_widget:
-            self._gl_widget.set_time(t)
-        cur_time = '%02d:%02d' % divmod(t, 60)
-        duration = '%02d:%02d' % divmod(self._scene_duration, 60)
-        self._time_lbl.setText('%s / %s (%d @ %.4gHz)' % (cur_time, duration, self._frame_index, rendering_fps))
-        self._slider.setValue(t * self.SLIDER_TIMEBASE)
+        self.refresh()
 
     def _step_frame_index(self, n):
         self._set_action('pause')
         self._frame_index += n
         if self._frame_index < 0:
             self._frame_index = 0
-        self._refresh()
+        self.refresh()
 
     @QtCore.pyqtSlot()
     def _stop(self):
         self._set_action('pause')
-        self._gl_widget.reset_viewer()
+        self.stopped.emit()
 
     @QtCore.pyqtSlot()
     def _step_fw(self):
@@ -396,6 +454,84 @@ class _GLView(QtWidgets.QWidget):
     @QtCore.pyqtSlot()
     def _step_bw(self):
         self._step_frame_index(-1)
+
+    @QtCore.pyqtSlot(int)
+    def _slider_moved(self, value):  # only user move
+        if not self._scene_duration:
+            return
+        self._set_action('pause')
+        self._frame_index = int(value * self.SLIDER_TIMESCALE * self._framerate[0] / self._framerate[1])
+        self.refresh()
+
+    def refresh(self):
+        rendering_fps = self._framerate[0] / float(self._framerate[1])
+        t = self._frame_index * 1. / rendering_fps
+        cur_time = '%02d:%02d' % divmod(t, 60)
+        duration = '%02d:%02d' % divmod(self._scene_duration, 60)
+        self._time_lbl.setText('%s / %s (%d @ %.4gHz)' % (cur_time, duration, self._frame_index, rendering_fps))
+        self._slider.setValue(t * self.SLIDER_TIMEBASE)
+        self.timeChanged.emit(t)
+
+    def set_duration(self, duration):
+        self._scene_duration = duration
+        self._slider.setRange(0, duration * self.SLIDER_TIMEBASE)
+        self.refresh()
+
+    def set_framerate(self, framerate):
+        self._framerate = framerate
+        assert framerate[1]
+        self.refresh()
+
+    def set_frame_index(self, frame_index):
+        self._frame_index = frame_index
+        self.refresh()
+
+    def get_frame_index(self):
+        return self._frame_index
+
+    def __init__(self, framerate):
+        super(_Seekbar, self).__init__()
+
+        self._timer = QtCore.QTimer()
+        self._timer.setInterval(1000.0 / self.REFRESH_RATE)  # in milliseconds
+
+        self._slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self._time_lbl = QtWidgets.QLabel()
+
+        stop_btn = QtWidgets.QToolButton()
+        stop_btn.setText(u'◾')
+        self._action_btn = QtWidgets.QToolButton()
+        self._set_action('pause')
+
+        fw_btn = QtWidgets.QToolButton()
+        fw_btn.setText('>')
+        bw_btn = QtWidgets.QToolButton()
+        bw_btn.setText('<')
+
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(stop_btn)
+        layout.addWidget(bw_btn)
+        layout.addWidget(self._action_btn)
+        layout.addWidget(fw_btn)
+        layout.addWidget(self._slider)
+        layout.addWidget(self._time_lbl)
+
+        self._frame_index = 0
+        self._clock_off = -1
+        self._scene_duration = 0
+        self.set_framerate(framerate)
+
+        self._slider.sliderMoved.connect(self._slider_moved)
+
+        stop_btn.clicked.connect(self._stop)
+        self._action_btn.clicked.connect(self._toggle_playback)
+        fw_btn.clicked.connect(self._step_fw)
+        bw_btn.clicked.connect(self._step_bw)
+
+        self._timer.timeout.connect(self._update_tick)
+
+class _GLView(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot()
     def _screenshot(self):
@@ -418,7 +554,7 @@ class _GLView(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(tuple)
     def set_frame_rate(self, fr):
-        self._framerate = fr
+        self._seekbar.set_framerate(fr)
 
     @QtCore.pyqtSlot(int)
     def set_samples(self, samples):
@@ -437,70 +573,39 @@ class _GLView(QtWidgets.QWidget):
         if Fraction(*cfg['aspect_ratio']) != Fraction(*self._ar):
             self.set_aspect_ratio(cfg['aspect_ratio'])
         self._gl_widget.set_scene(cfg['scene'])
-        self._scene_duration = cfg['duration']
-        self._slider.setRange(0, self._scene_duration * self.SLIDER_TIMEBASE)
-        self._refresh()
+        self._seekbar.set_duration(cfg['duration'])
+
+    @QtCore.pyqtSlot(float)
+    def _time_changed(self, t):
+        self._gl_widget.set_time(t)
 
     def __init__(self, get_scene_func, config):
         super(_GLView, self).__init__()
 
         self._ar = config.get('aspect_ratio')
-        self._framerate = config.get('framerate')
         self._samples = config.get('samples')
         self._clear_color = config.get('clear_color')
 
         self._get_scene_func = get_scene_func
 
-        self._frame_index = 0
-        self._clock_off = -1
-        self._scene_duration = 0
-
-        self._timer = QtCore.QTimer()
-        self._timer.setInterval(1000.0 / self.REFRESH_RATE)  # in milliseconds
-
         self._gl_widget = _GLWidget(self, self._ar, self._samples, self._clear_color)
-
-        self._slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-
-        stop_btn = QtWidgets.QToolButton()
-        stop_btn.setText(u'◾')
-        self._action_btn = QtWidgets.QToolButton()
-        self._set_action('pause')
-
-        fw_btn = QtWidgets.QToolButton()
-        fw_btn.setText('>')
-        bw_btn = QtWidgets.QToolButton()
-        bw_btn.setText('<')
-
-        self._time_lbl = QtWidgets.QLabel()
+        self._seekbar = _Seekbar(config.get('framerate'))
 
         screenshot_btn = QtWidgets.QToolButton()
         screenshot_btn.setText(u'📷')
 
         toolbar = QtWidgets.QHBoxLayout()
-        toolbar.addWidget(stop_btn)
-        toolbar.addWidget(bw_btn)
-        toolbar.addWidget(self._action_btn)
-        toolbar.addWidget(fw_btn)
-        toolbar.addWidget(self._time_lbl)
-        toolbar.addStretch()
+        toolbar.addWidget(self._seekbar)
         toolbar.addWidget(screenshot_btn)
 
         self._gl_layout = QtWidgets.QVBoxLayout(self)
         self._gl_layout.addWidget(self._gl_widget, stretch=1)
-        self._gl_layout.addWidget(self._slider)
         self._gl_layout.addLayout(toolbar)
 
-        self._refresh()
-
-        self._timer.timeout.connect(self._update_tick)
-
-        stop_btn.clicked.connect(self._stop)
-        self._action_btn.clicked.connect(self._toggle_playback)
-        fw_btn.clicked.connect(self._step_fw)
-        bw_btn.clicked.connect(self._step_bw)
-        self._slider.sliderMoved.connect(self._slider_moved)
         screenshot_btn.clicked.connect(self._screenshot)
+
+        self._seekbar.timeChanged.connect(self._time_changed)
+        self._seekbar.stopped.connect(self._gl_widget.reset_viewer)
 
 
 class _Toolbar(QtWidgets.QWidget):
@@ -1042,7 +1147,7 @@ class _MainWindow(QtWidgets.QSplitter):
             self.setGeometry(geometry)
 
         gl_view = _GLView(get_scene_func, self._config)
-        graph_view = _GraphView(get_scene_func)
+        graph_view = _GraphView(get_scene_func, self._config)
         export_view = _ExportView(self, get_scene_func)
         serial_view = _SerialView(get_scene_func)
 
@@ -1067,6 +1172,7 @@ class _MainWindow(QtWidgets.QSplitter):
         self._scene_toolbar.samplesChanged.connect(gl_view.set_samples)
         self._scene_toolbar.samplesChanged.connect(self._config.set_samples)
         self._scene_toolbar.frameRateChanged.connect(gl_view.set_frame_rate)
+        self._scene_toolbar.frameRateChanged.connect(graph_view.set_frame_rate)
         self._scene_toolbar.frameRateChanged.connect(self._config.set_frame_rate)
         self._scene_toolbar.clearColorChanged.connect(gl_view.set_clear_color)
         self._scene_toolbar.clearColorChanged.connect(self._config.set_clear_color)
