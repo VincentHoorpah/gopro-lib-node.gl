@@ -65,6 +65,7 @@ def log_set_min_level(int level):
 
 cdef class Viewer:
     cdef ngl_ctx *ctx
+    cdef ngl_node *scene
 
     def __cinit__(self):
         self.ctx = ngl_create()
@@ -75,17 +76,22 @@ cdef class Viewer:
         return ngl_set_glcontext(self.ctx, NULL, NULL, NULL, platform, api)
 
     def set_scene(self, _Node scene):
+        self.scene = ngl_node_ref(scene.ctx)
         return ngl_set_scene(self.ctx, scene.ctx)
 
     def set_scene_from_string(self, s):
-        cdef ngl_node *scene = ngl_node_deserialize(s);
-        ret = ngl_set_scene(self.ctx, scene)
-        ngl_node_unrefp(&scene)
+        self.scene = ngl_node_deserialize(s);
+        ret = ngl_set_scene(self.ctx, self.scene)
         return ret
 
     def draw(self, double t):
         with nogil:
             ngl_draw(self.ctx, t)
 
+    def dot_at_time(self, double t):
+        self.draw(t)
+        return ngl_node_dot(self.scene)
+
     def __dealloc__(self):
+        ngl_node_unrefp(&self.scene)
         ngl_free(&self.ctx)

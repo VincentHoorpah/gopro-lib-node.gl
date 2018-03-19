@@ -162,7 +162,11 @@ static void print_packed_decls(struct bstr *b, const char *name,
         ngli_bstr_print(b, LB "- %s", info_str ? info_str : "?");
         free(info_str);
     }
-    ngli_bstr_print(b, LB ">,shape=box,color="HSLFMT"]\n", get_hue(name));
+    ngli_bstr_print(b, LB ">,shape=box,color=");
+    if (!nb_children || !children[0]->ctx || children[0]->is_active)
+        ngli_bstr_print(b, HSLFMT"]\n", get_hue(name));
+    else
+        ngli_bstr_print(b, "\"#333333\"]\n");
 }
 
 static void print_decls(struct bstr *b, const struct ngl_node *node,
